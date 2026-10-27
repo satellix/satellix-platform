@@ -15,7 +15,7 @@ Each microservice has its own database and a OPENAPI contract. Current plan is t
 PostgreSQL for the database of each of the microservices.
 
 Identity/Profile service's db hold the user information.
-Satellite tracking and prediction service's db hold information of all the satellites, the predictions and subscriptions.
+Satellite tracking and prediction service's database holds information about all the satellites and predictions.
 Notification service's db holds information of current notification requests, a periodical worker visits the unfinished entries and sends the notification.
 
 ## Consequences
