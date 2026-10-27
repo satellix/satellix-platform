@@ -1,4 +1,4 @@
-![image](/media/banner.png)
+![image](media/banner.png)
 
 # Satellix
 
