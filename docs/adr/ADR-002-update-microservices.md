@@ -1,6 +1,7 @@
 # ADR-002: Removing the user management microservice in favor of a cleaner 2-microservice approach
 
 Status: accepted\
+Supersedes: ADR-001\
 Date: 09-11-2026
 
 ## Context

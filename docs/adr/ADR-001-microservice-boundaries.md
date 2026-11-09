@@ -1,6 +1,6 @@
 # ADR-001: Splitting Satellix platform into 3 separate microservices
 
-Status: accepted\
+Status: superseded by ADR-002\
 Date: 27-10-2026
 
 ## Context
