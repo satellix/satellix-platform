@@ -10,7 +10,7 @@ It aims to let users:
 
 \- Explore satellites and their orbits.\
 \- View upcoming satellite passes for selected locations.\
-\- Subscribe to notifications about upcoming passes.\
+\- Subscribe to notifications about upcoming passes.
 
 ### Documentation
 

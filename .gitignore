@@ -1,0 +1,58 @@
+# Operating systems specific
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDEs and editors
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+*~
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+!.env.template
+
+*.pem
+*.key
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.pid
+temp*
+
+# Build outputs
+build/
+dist/
+out/
+target/
+
+# Java / Spring Boot / Gradle / Maven
+.gradle/
+*.class
+.mvn/timing.properties
+
+# Node.js / TypeScript / JavaScript
+node_modules/
+.npm/
+.pnpm-store/
+coverage/
+.next/
+.turbo/
+
+# Test and coverage artifacts
+.coverage
+coverage.xml
+test-results/
