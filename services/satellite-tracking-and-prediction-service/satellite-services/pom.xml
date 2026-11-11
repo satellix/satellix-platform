@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>si.satellix</groupId>
+        <artifactId>satellite-tracking-and-prediction-service</artifactId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>satellite-services</artifactId>
+    <packaging>jar</packaging>  <!-- pazi: packinging ni niti pom niti quarkus ampak jar ker je to ubistu navaden library za nadaljno uporabo upstream -->
+
+    <dependencies>
+        <dependency>
+            <groupId>si.satellix</groupId>
+            <artifactId>satellite-persistence</artifactId> <!-- da lahko uporablja razrede iz persistance layerja (en nizje) -->
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-arc</artifactId> <!-- context and dependency injection container za quarkus-->
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>io.smallrye</groupId>
+                <artifactId>jandex-maven-plugin</artifactId>  <!-- indeks razredov in anotacij (T05) -->
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>jandex</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>
