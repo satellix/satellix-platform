@@ -1,0 +1,672 @@
+openapi: 3.1.0
+info:
+    title: Satellix - Satellite Tracking and Prediction API
+    version: 0.2.0
+    summary: Public API for active satellite discovery, short ground tracks, and visible passes.
+    description: |
+        The Satellix Satellite Tracking and Prediction Service exposes an active-satellite
+        catalog synchronized daily from CelesTrak and satellite ground-track and visual-pass
+        predictions retrieved from N2YO.
+
+        This API is public and requires no login. Upstream API keys are stored on the server;
+        consumer rate limits and provider quotas are enforced separately. A satellite in the
+        local catalog is not guaranteed to have data available from N2YO.
+
+        Times use RFC 3339 UTC. A ground-track point is the location on Earth's surface
+        directly below a satellite, not the position of an observer looking toward it.
+        Position data are requested when a satellite is opened or explicitly refreshed;
+        the frontend does not poll automatically. The backend may use short lived caching.
+    contact:
+        name: Satellix platform
+servers:
+    - url: http://localhost:8080/v1
+      description: Local Quarkus development
+security: []
+tags:
+    - name: Satellites
+      description: Read only active satellite catalog synchronized from CelesTrak SATCAT.
+    - name: Tracking
+      description: Current sub-satellite position and a short predicted ground track from N2YO.
+    - name: VisualPasses
+      description: Predicted optically visible satellite passes from N2YO.
+paths:
+    /satellites:
+        get:
+            tags:
+                - Satellites
+            operationId: listSatellites
+            security: []
+            summary: Browse and search a list of active satellites
+            description: |
+                Return a deterministic, paginated page of active satellites from the local
+                catalog. CelesTrak is synchronized daily, not contacted for each request.
+                Exact NORAD ID and case insensitive substring name filters may be combined (AND).
+                The selected sort is made deterministic with NORAD ID as a tie breaker.
+                The response includes navigation fields and the catalog synchronization timestamp.
+            parameters:
+                - $ref: "#/components/parameters/NoradIdFilter"
+                - $ref: "#/components/parameters/NameFilter"
+                - $ref: "#/components/parameters/Offset"
+                - $ref: "#/components/parameters/Limit"
+                - $ref: "#/components/parameters/Sort"
+            responses:
+                "200":
+                    description: Matching active satellites. Empty results are an empty array.
+                    headers:
+                        Cache-Control:
+                            $ref: "#/components/headers/CacheControl"
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/SatellitesPage"
+                            examples:
+                                singleResult:
+                                    summary: Example first page filtered by NORAD ID (illustrative metadata)
+                                    value:
+                                        items:
+                                            - noradId: 25544
+                                              name: ISS (ZARYA)
+                                        offset: 0
+                                        limit: 20
+                                        totalItems: 1
+                                        hasNext: false
+                                        nextOffset: null
+                                        catalogSyncedAt: "2026-11-05T00:00:00Z"
+                "400":
+                    $ref: "#/components/responses/BadRequest"
+                "429":
+                    $ref: "#/components/responses/TooManyRequests"
+                "503":
+                    $ref: "#/components/responses/ServiceUnavailable"
+                "500":
+                    $ref: "#/components/responses/InternalError"
+    /satellites/{noradId}:
+        parameters:
+            - $ref: "#/components/parameters/NoradIdPath"
+        get:
+            tags:
+                - Satellites
+            operationId: getSatellite
+            security: []
+            summary: Get active satellite details
+            description: |
+                Return basic details for an active satellite from the last completed CelesTrak
+                catalog import. Live altitude and current geographic location are available
+                through the positions endpoint. The owner is catalog ownership, not necessarily
+                an operating company. Unknown catalog fields are represented as null.
+            responses:
+                "200":
+                    description: Metadata of an active satellite from the latest catalog snapshot.
+                    headers:
+                        Cache-Control:
+                            $ref: "#/components/headers/CacheControl"
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/SatelliteDetail"
+                            examples:
+                                iss:
+                                    summary: ISS metadata (representative source data)
+                                    value:
+                                        noradId: 25544
+                                        name: ISS (ZARYA)
+                                        internationalDesignator: 1998-067A
+                                        owner: International Space Station
+                                        launchDate: "1998-11-20"
+                                        orbitalPeriodMinutes: 92.94
+                "400":
+                    $ref: "#/components/responses/BadRequest"
+                "404":
+                    $ref: "#/components/responses/SatelliteNotFound"
+                "429":
+                    $ref: "#/components/responses/TooManyRequests"
+                "503":
+                    $ref: "#/components/responses/ServiceUnavailable"
+                "500":
+                    $ref: "#/components/responses/InternalError"
+    /satellites/{noradId}/positions:
+        parameters:
+            - $ref: "#/components/parameters/NoradIdPath"
+        get:
+            tags:
+                - Tracking
+            operationId: getSatellitePositions
+            security: []
+            summary: Get the current position and a short predicted ground track
+            description: |
+                Return the satellite's estimated current ground position and a short future
+                ground track from N2YO. The server requests up to 300 one-second positions and
+                samples future positions at fixed 10-second intervals; these settings are not
+                client-configurable. The first upstream sample is currentPosition. trajectory
+                contains only later coordinates, ordered every 10 seconds after the
+                currentPosition timestamp (for example +10, +20, ... +290 seconds); it does NOT
+                repeat currentPosition. The client prepends currentPosition to draw the line.
+
+                N2YO requires an observer even for geographic ground-track data; the adapter
+                uses a fixed internal observer (0,0,0 m). No sky-relative azimuth or elevation
+                is exposed. The frontend calls this on initial display and explicit Refresh,
+                not with automatic periodic polling. A server cache may supply a recent result;
+                currentPosition.timestamp describes the time represented by that position.
+            responses:
+                "200":
+                    description: Predicted geographic positions from N2YO.
+                    headers:
+                        Cache-Control:
+                            $ref: "#/components/headers/CacheControl"
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/SatellitePositions"
+                            examples:
+                                shortTrack:
+                                    summary: Illustrative current position and three future points (not a real forecast)
+                                    value:
+                                        noradId: 25544
+                                        currentPosition:
+                                            timestamp: "2026-11-07T12:00:00Z"
+                                            latitude: 45.1
+                                            longitude: 14.25
+                                            altitudeKm: 415.2
+                                        trajectory:
+                                            - latitude: 45.45
+                                              longitude: 14.82
+                                            - latitude: 45.8
+                                              longitude: 15.39
+                                            - latitude: 46.05
+                                              longitude: 15.85
+                "400":
+                    $ref: "#/components/responses/BadRequest"
+                "404":
+                    $ref: "#/components/responses/SatelliteNotFound"
+                "429":
+                    $ref: "#/components/responses/TooManyRequests"
+                "502":
+                    $ref: "#/components/responses/UpstreamFailure"
+                "503":
+                    $ref: "#/components/responses/ServiceUnavailable"
+                "500":
+                    $ref: "#/components/responses/InternalError"
+    /satellites/{noradId}/visual-passes:
+        parameters:
+            - $ref: "#/components/parameters/NoradIdPath"
+        get:
+            tags:
+                - VisualPasses
+            operationId: listVisualPasses
+            security: []
+            summary: Predict visual passes over specified coordinates
+            description: |
+                Return optically visible passes over the requested coordinates, sorted by
+                startTime ascending. Latitude and longitude are required. altitudeMeters
+                (default 0) and days (default 7, maximum 10) are optional.
+
+                Satellix requests a minimum visibility duration of 60 seconds from N2YO and
+                filters the returned passes to a minimum peak elevation of 10 degrees. These
+                thresholds are fixed internally for the MVP and are not exposed as parameters.
+                An empty list is returned as HTTP 200 with passes: [], never 404. Results are
+                estimates; subscriptions and email delivery belong to Notification Service.
+            parameters:
+                - $ref: "#/components/parameters/Latitude"
+                - $ref: "#/components/parameters/Longitude"
+                - $ref: "#/components/parameters/AltitudeMeters"
+                - $ref: "#/components/parameters/Days"
+            responses:
+                "200":
+                    description: Visible passes for the specified observer, possibly empty.
+                    headers:
+                        Cache-Control:
+                            $ref: "#/components/headers/CacheControl"
+                    content:
+                        application/json:
+                            schema:
+                                $ref: "#/components/schemas/VisualPassesResult"
+                            examples:
+                                noVisiblePass:
+                                    summary: Example with no qualifying visual passes
+                                    value:
+                                        passes: []
+                                illustrativePass:
+                                    summary: Illustrative values, not a real prediction
+                                    value:
+                                        passes:
+                                            - startTime: "2026-11-08T18:30:00Z"
+                                              endTime: "2026-11-08T18:36:00Z"
+                                              maxElevationDegrees: 58.4
+                                            - startTime: "2026-11-09T19:12:00Z"
+                                              endTime: "2026-11-09T19:17:00Z"
+                                              maxElevationDegrees: 35.2
+                "400":
+                    $ref: "#/components/responses/BadRequest"
+                "404":
+                    $ref: "#/components/responses/SatelliteNotFound"
+                "429":
+                    $ref: "#/components/responses/TooManyRequests"
+                "502":
+                    $ref: "#/components/responses/UpstreamFailure"
+                "503":
+                    $ref: "#/components/responses/ServiceUnavailable"
+                "500":
+                    $ref: "#/components/responses/InternalError"
+components:
+    parameters:
+        NoradIdPath:
+            name: noradId
+            in: path
+            description: Numeric NORAD catalog identifier.
+            required: true
+            schema:
+                $ref: "#/components/schemas/NoradId"
+        NoradIdFilter:
+            name: noradId
+            in: query
+            description: Exact-match NORAD catalog identifier.
+            required: false
+            schema:
+                $ref: "#/components/schemas/NoradId"
+        NameFilter:
+            name: name
+            in: query
+            description: Case insensitive substring of satellite name.
+            required: false
+            schema:
+                type: string
+                minLength: 1
+                maxLength: 32 # na internetu pise da so max 24 oz. 28 znakov -> popravi ce pri obdelavi podatkov najdes daljse
+            example: STARLINK
+        Offset:
+            name: offset
+            in: query
+            description: Zero based starting index of the requested page.
+            schema:
+                type: integer
+                minimum: 0
+                default: 0
+            example: 0
+        Limit:
+            name: limit
+            in: query
+            description: Maximum number of results per page.
+            schema:
+                type: integer
+                minimum: 1
+                maximum: 100
+                default: 20
+            example: 20
+        Sort:
+            name: sort
+            in: query
+            description: Sort by NORAD ID or satellite name; NORAD ID is a stable tie-breaker.
+            schema:
+                type: string
+                enum:
+                    - noradId
+                    - -noradId
+                    - name
+                    - -name
+                default: noradId
+        Latitude:
+            name: latitude
+            in: query
+            required: true
+            description: Observer latitude in decimal degrees, WGS84.
+            schema:
+                type: number
+                format: double
+                minimum: -90
+                maximum: 90
+            example: 46.0569
+        Longitude:
+            name: longitude
+            in: query
+            required: true
+            description: Observer longitude in decimal degrees, WGS84.
+            schema:
+                type: number
+                format: double
+                minimum: -180
+                maximum: 180
+            example: 14.5058
+        AltitudeMeters:
+            name: altitudeMeters
+            in: query
+            description: Observer altitude above sea level; 0 when not know/specified.
+            schema:
+                type: number
+                minimum: -500
+                maximum: 10000
+                default: 0
+        Days:
+            name: days
+            in: query
+            description: Prediction horizon in whole days, with N2YO maximum of 10.
+            schema:
+                type: integer
+                minimum: 1
+                maximum: 10
+                default: 7
+    headers:
+        CacheControl:
+            description: Caching policy set by the server.
+            schema:
+                type: string
+            example: public, max-age=60
+        RetryAfter:
+            description: Seconds to wait before retrying; present when known.
+            schema:
+                type: integer
+                minimum: 0
+            example: 60
+    responses:
+        BadRequest:
+            description: Malformed or invalid path/query parameters.
+            content:
+                application/problem+json:
+                    schema:
+                        $ref: "#/components/schemas/Problem"
+                    examples:
+                        invalidLatitude:
+                            value:
+                                type: about:blank
+                                title: Bad Request
+                                status: 400
+                                detail: The request has invalid parameters.
+                                errors:
+                                    - pointer: "#/query/latitude"
+                                      detail: Must be between -90 and 90.
+        SatelliteNotFound:
+            description: Satellite is absent from the current active-satellite catalog.
+            content:
+                application/problem+json:
+                    schema:
+                        $ref: "#/components/schemas/Problem"
+                    examples:
+                        unknownSatellite:
+                            value:
+                                type: about:blank
+                                title: Not Found
+                                status: 404
+                                detail: No active satellite with the requested NORAD ID was found.
+        TooManyRequests:
+            description: Public API rate limit exceeded for this client.
+            headers:
+                Retry-After:
+                    $ref: "#/components/headers/RetryAfter"
+            content:
+                application/problem+json:
+                    schema:
+                        $ref: "#/components/schemas/Problem"
+                    examples:
+                        limited:
+                            value:
+                                type: about:blank
+                                title: Too Many Requests
+                                status: 429
+                                detail: Request budget exceeded. Retry later.
+        UpstreamFailure:
+            description: N2YO produced an invalid or unusable response.
+            content:
+                application/problem+json:
+                    schema:
+                        $ref: "#/components/schemas/Problem"
+        ServiceUnavailable:
+            description: Catalog unavailable or upstream service temporarily unavailable / quota exhausted.
+            headers:
+                Retry-After:
+                    $ref: "#/components/headers/RetryAfter"
+            content:
+                application/problem+json:
+                    schema:
+                        $ref: "#/components/schemas/Problem"
+        InternalError:
+            description: An unexpected server error occurred.
+            content:
+                application/problem+json:
+                    schema:
+                        $ref: "#/components/schemas/Problem"
+    schemas:
+        NoradId:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 2147483647
+            examples:
+                - 20580 # Hubble telescope
+                - 25544 # ISS (Zarya module)
+        SatelliteSummary:
+            type: object
+            required:
+                - noradId
+                - name
+            properties:
+                noradId:
+                    $ref: "#/components/schemas/NoradId"
+                name:
+                    type: string
+                    minLength: 1
+                    examples:
+                        - ISS (ZARYA)
+            additionalProperties: false
+        SatelliteDetail:
+            type: object
+            description: Minimal catalog details for one active satellite. The owner is the catalog owner,
+                not necessarily the current operator.
+            additionalProperties: false
+            required:
+                - noradId
+                - name
+                - internationalDesignator
+                - owner
+                - launchDate
+                - orbitalPeriodMinutes
+            properties:
+                noradId:
+                    $ref: "#/components/schemas/NoradId"
+                name:
+                    type: string
+                    minLength: 1
+                    examples:
+                        - ISS (ZARYA)
+                internationalDesignator:
+                    type:
+                        - string
+                        - "null"
+                    description: COSPAR international designator, if available.
+                    examples:
+                        - 1998-067A
+                owner:
+                    type:
+                        - string
+                        - "null"
+                    description: Human-readable SATCAT owner when known; may be a country or organization, not
+                        necessarily the operator.
+                    examples:
+                        - International Space Station
+                launchDate:
+                    type:
+                        - string
+                        - "null"
+                    format: date
+                    description: Launch date from the catalog if known.
+                orbitalPeriodMinutes:
+                    type:
+                        - number
+                        - "null"
+                    minimum: 0
+                    description: Orbital period in minutes from the catalog if known.
+        SatellitesPage: # posamezen paginated page od satellites list-a (/satellites)
+            type: object
+            additionalProperties: false
+            required:
+                - items
+                - offset
+                - limit
+                - totalItems
+                - hasNext
+                - nextOffset
+                - catalogSyncedAt
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: "#/components/schemas/SatelliteSummary"
+                offset:
+                    type: integer
+                    minimum: 0
+                limit:
+                    type: integer
+                    minimum: 1
+                    maximum: 100
+                totalItems:
+                    type: integer
+                    minimum: 0
+                    description: Count after filters within the current catalog snapshot.
+                hasNext:
+                    type: boolean
+                    description: True if another page exists in the current catalog snapshot.
+                nextOffset:
+                    type:
+                        - integer
+                        - "null"
+                    minimum: 0
+                    description: Offset for the next page, or null when hasNext is false.
+                catalogSyncedAt:
+                    type: string
+                    format: date-time
+                    description: UTC time of the last completed daily catalog import.
+        GeographicPosition:
+            type: object
+            additionalProperties: false
+            required:
+                - timestamp
+                - latitude
+                - longitude
+                - altitudeKm
+            properties:
+                timestamp:
+                    type: string
+                    format: date-time
+                    description: Time of predicted sub-satellite position in UTC.
+                latitude:
+                    type: number
+                    minimum: -90
+                    maximum: 90
+                    description: Latitude of the ground point directly below the satellite.
+                longitude:
+                    type: number
+                    minimum: -180
+                    maximum: 180
+                    description: Longitude of the ground point directly below the satellite.
+                altitudeKm:
+                    type: number
+                    description: Satellite altitude above Earth in kilometers at this timestamp.
+        SatellitePositions:
+            type: object
+            additionalProperties: false
+            required:
+                - noradId
+                - currentPosition
+                - trajectory
+            properties:
+                noradId:
+                    $ref: "#/components/schemas/NoradId"
+                currentPosition:
+                    $ref: "#/components/schemas/GeographicPosition"
+                trajectory:
+                    type: array
+                    minItems: 0
+                    maxItems: 29
+                    description: Future ground-track coordinates at +10s, +20s, ..., up to +290s after
+                        currentPosition. Does not include the current position.
+                    items:
+                        $ref: "#/components/schemas/TrajectoryPoint"
+        VisualPass:
+            type: object
+            additionalProperties: false
+            required:
+                - startTime
+                - endTime
+                - maxElevationDegrees
+            properties:
+                startTime:
+                    type: string
+                    format: date-time
+                    description: Start of optical visibility, UTC.
+                endTime:
+                    type: string
+                    format: date-time
+                    description: End of optical visibility, UTC.
+                maxElevationDegrees:
+                    type: number
+                    minimum: 0
+                    maximum: 90
+                    description: Peak observed elevation of the pass in degrees.
+        VisualPassesResult:
+            type: object
+            additionalProperties: false
+            required:
+                - passes
+            properties:
+                passes:
+                    type: array
+                    description: Zero or more visible passes ordered by startTime ascending.
+                    items:
+                        $ref: "#/components/schemas/VisualPass"
+        FieldError:
+            type: object
+            additionalProperties: false
+            required:
+                - pointer
+                - detail
+            properties:
+                pointer:
+                    type: string
+                    description: JSON Pointer to the invalid request parameter.
+                    examples:
+                        - "#/query/latitude"
+                detail:
+                    type: string
+                    examples:
+                        - Must be between -90 and 90.
+        Problem:
+            type: object
+            description: RFC 9457 Problem Details, with optional field error details. # pogooglej Problem Details for HTTP APIs
+            required:
+                - type
+                - title
+                - status
+            properties:
+                type:
+                    type: string
+                    format: uri-reference
+                    default: about:blank
+                title:
+                    type: string
+                status:
+                    type: integer
+                    minimum: 400
+                    maximum: 599
+                detail:
+                    type: string
+                instance:
+                    type: string
+                    format: uri-reference
+                errors:
+                    type: array
+                    items:
+                        $ref: "#/components/schemas/FieldError"
+        TrajectoryPoint:
+            type: object
+            additionalProperties: false
+            description: A future geographic ground-track coordinate (one of the regular 10-second steps).
+            required:
+                - latitude
+                - longitude
+            properties:
+                latitude:
+                    type: number
+                    minimum: -90
+                    maximum: 90
+                longitude:
+                    type: number
+                    minimum: -180
+                    maximum: 180
