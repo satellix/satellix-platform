@@ -16,7 +16,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 
 @ApplicationScoped
-@Path("/")
+//@Path("/")
 public class SatelliteResource implements SatellitesApi {
     private List<SatelliteDetail> satellitesDetails;
     private List<SatelliteSummary> satellitesSummaries;

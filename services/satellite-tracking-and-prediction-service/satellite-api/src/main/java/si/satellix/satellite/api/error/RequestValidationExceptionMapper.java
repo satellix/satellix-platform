@@ -37,7 +37,7 @@ public class RequestValidationExceptionMapper implements ExceptionMapper<Resteas
         // ce pogledas target/.../api/generated/SatellitesApi.java vidis vse ki se pretičejo /satellites in /satellites/{noradId}
         // #DISCLOSURE:AI
         for(ConstraintViolation<?> violation : exception.getConstraintViolations()) {
-            String paramterName = null;
+            String parameterName = null;
 
             for (Path.Node node : violation.getPropertyPath()) {
                 // napaka v vrnjeni vrednosti je napaka streznika ne pa napaka uporabnika
@@ -46,12 +46,17 @@ public class RequestValidationExceptionMapper implements ExceptionMapper<Resteas
                 }
 
                 if(node.getKind() == ElementKind.PARAMETER){
-                    paramterName = violation.getPropertyPath().toString();
+                    parameterName = violation.getPropertyPath().toString();
                 }
             }
 
-            if (paramterName != null){
-                problem.addErrorsItem(new FieldError("#/.../" + paramterName, violation.getMessage()));
+            if (parameterName != null){
+                // spremeni npr. listSatellites.limit v samo limit -> ni treba da uporabnik ve tocna imena internih metod
+                problem.addErrorsItem(
+                        new FieldError(
+                                "#/query/" + parameterName.substring(parameterName.lastIndexOf('.') + 1), violation.getMessage()
+                        )
+                );
             }
         }
 

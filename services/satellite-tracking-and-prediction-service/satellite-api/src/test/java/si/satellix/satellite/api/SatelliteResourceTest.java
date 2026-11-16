@@ -38,7 +38,7 @@ public class SatelliteResourceTest {
                 .body("type", is("about:blank"))
                 .body("title", is("Bad Request"))
                 .body("status", is(400))
-                .body("errors.pointer[0]", containsString(".limit"));
+                .body("errors.pointer[0]", containsString("limit"));
     }
 
     @Test
