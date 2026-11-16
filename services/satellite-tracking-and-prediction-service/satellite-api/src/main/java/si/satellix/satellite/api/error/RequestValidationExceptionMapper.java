@@ -37,6 +37,7 @@ public class RequestValidationExceptionMapper implements ExceptionMapper<Resteas
         // ce pogledas target/.../api/generated/SatellitesApi.java vidis vse ki se pretičejo /satellites in /satellites/{noradId}
         // #DISCLOSURE:AI
         for(ConstraintViolation<?> violation : exception.getConstraintViolations()) {
+            String methodName = null;
             String parameterName = null;
 
             for (Path.Node node : violation.getPropertyPath()) {
@@ -45,17 +46,20 @@ public class RequestValidationExceptionMapper implements ExceptionMapper<Resteas
                     throw exception;
                 }
 
-                if(node.getKind() == ElementKind.PARAMETER){
-                    parameterName = violation.getPropertyPath().toString();
+                if (node.getKind() == ElementKind.METHOD) {
+                    methodName = node.getName();
+                }
+                if (node.getKind() == ElementKind.PARAMETER) {
+                    parameterName = node.getName();
                 }
             }
 
             if (parameterName != null){
-                // spremeni npr. listSatellites.limit v samo limit -> ni treba da uporabnik ve tocna imena internih metod
+                // 16.11.2026: po trenutni openapi specifikaciji je noradId query parameter samo pri /satellites za potrebe filtriranja/sortiranja
+                boolean isPathParameter = "noradId".equals(parameterName) && !"listSatellites".equals(methodName);
+                String prefix = isPathParameter ? "#/path/" : "#/query/";
                 problem.addErrorsItem(
-                        new FieldError(
-                                "#/query/" + parameterName.substring(parameterName.lastIndexOf('.') + 1), violation.getMessage()
-                        )
+                        new FieldError(prefix + parameterName, violation.getMessage())
                 );
             }
         }
