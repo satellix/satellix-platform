@@ -10,7 +10,7 @@ import static org.hamcrest.Matchers.*;
 public class TrackingResourceTest {
 
     @Test
-    void getSatellitePositionsReturnsIssAndHubble(){
+    void getSatellitePositionsReturnsPositionAndTrajectory(){
         given()
                 .accept("application/json")
                 .pathParam("noradId", 25544)
