@@ -3,7 +3,6 @@ package si.satellix.satellite.api;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.ws.rs.NotFoundException;
-import jakarta.ws.rs.Path;
 import si.satellix.satellite.api.generated.SatellitesApi;
 import si.satellix.satellite.api.generated.model.SatelliteDetail;
 import si.satellix.satellite.api.generated.model.SatelliteSummary;
@@ -16,7 +15,6 @@ import java.time.OffsetDateTime;
 import java.util.List;
 
 @ApplicationScoped
-//@Path("/")
 public class SatelliteResource implements SatellitesApi {
     private List<SatelliteDetail> satellitesDetails;
     private List<SatelliteSummary> satellitesSummaries;
